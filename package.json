@@ -1,5 +1,5 @@
 {
-  "name": "fan-backend",
+  "name": "fan-web-control",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
@@ -7,7 +7,6 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "ws": "^8.18.0",
-    "cors": "^2.8.5"
+    "ws": "^8.18.0"
   }
 }
