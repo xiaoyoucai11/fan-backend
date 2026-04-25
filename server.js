@@ -1,9 +1,14 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const WebSocket = require('ws');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+// 静态网页
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 当前风扇状态
 let fanState = {
@@ -14,6 +19,7 @@ let fanState = {
 
 // 设备端连接
 let deviceSocket = null;
+
 // 网页客户端集合
 const webClients = new Set();
 
@@ -25,9 +31,11 @@ app.get('/api/state', (req, res) => {
 wss.on('connection', (ws) => {
   console.log('新连接进入');
   ws.role = null;
+
   ws.on('message', (message) => {
     const text = message.toString();
     console.log('收到消息:', text);
+
     let data;
     try {
       data = JSON.parse(text);
@@ -35,28 +43,34 @@ wss.on('connection', (ws) => {
       console.log('JSON解析失败');
       return;
     }
+
     // 1. 注册身份
     if (data.type === 'register') {
       if (data.role === 'client') {
         ws.role = 'client';
         webClients.add(ws);
+
         ws.send(JSON.stringify({
           type: 'status',
           online: fanState.online,
           power: fanState.power,
           speed: fanState.speed
         }));
+
         console.log('网页客户端已注册');
       }
+
       if (data.role === 'device') {
         ws.role = 'device';
         deviceSocket = ws;
         fanState.online = true;
         broadcastStatus();
-        console.log('设备端已注册');
+
+        console.log('设备端已注册:', data.device || 'unknown');
       }
       return;
     }
+
     // 2. 网页控制命令 -> 转发给设备
     if (data.type === 'control') {
       if (deviceSocket && deviceSocket.readyState === WebSocket.OPEN) {
@@ -67,6 +81,7 @@ wss.on('connection', (ws) => {
       }
       return;
     }
+
     // 3. 设备上报状态 -> 广播给网页
     if (data.type === 'status') {
       fanState.online = true;
@@ -75,17 +90,21 @@ wss.on('connection', (ws) => {
       broadcastStatus();
       return;
     }
+
     // 4. 心跳
     if (data.type === 'heartbeat') {
       fanState.online = true;
       return;
     }
   });
+
   ws.on('close', () => {
     console.log('连接断开');
+
     if (ws.role === 'client') {
       webClients.delete(ws);
     }
+
     if (ws.role === 'device') {
       if (deviceSocket === ws) {
         deviceSocket = null;
@@ -103,6 +122,7 @@ function broadcastStatus() {
     power: fanState.power,
     speed: fanState.speed
   });
+
   webClients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(msg);
@@ -110,8 +130,8 @@ function broadcastStatus() {
   });
 }
 
-// ↓↓↓ 只改这一行！Vercel自动端口 ↓↓↓
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`服务器已启动`);
+  console.log(`服务器已启动，公网访问地址: http://你的公网IP:${PORT}`);
 });
