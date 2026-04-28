@@ -6,7 +6,7 @@ const app = express();
 
 // ✅ 保留你原来的前端域名
 app.use(cors({
-  origin: "http://fan.xaioyoucai11.com",
+  origin: "https://xiaoyoucai11.github.io/fan-frontend",
   credentials: true
 }));
 
