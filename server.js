@@ -12,7 +12,6 @@ app.use(cors({
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// 全局状态（所有控制都改这里，然后广播给网页）
 let fanState = {
   online: false, power: "off", speed: 0,
   temp: 0, humi: 0, mode: 1
@@ -33,7 +32,6 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(msg.toString());
 
-      // 注册
       if(data.type === "register") {
         ws.role = data.role;
         if(data.role === "client") { 
@@ -47,30 +45,26 @@ wss.on('connection', (ws) => {
         }
       }
 
-      // ========== 双向控制：网页 / 设备发指令都生效，网页实时同步 ==========
       if(data.type === "control") {
-        // 更新全局状态
         if(data.cmd === "on") fanState.power = "on";
         if(data.cmd === "off") fanState.power = "off";
         if(data.cmd === "speed") fanState.speed = data.value;
         if(data.cmd === "mode") fanState.mode = data.value;
 
-        // 发给设备执行
         if(deviceSocket?.readyState === WebSocket.OPEN) {
           deviceSocket.send(JSON.stringify(data));
         }
-
-        // 广播给所有网页同步UI
         broadcastStatus();
       }
 
-      // 设备上传温湿度、实时风速（自动模式用这个风速）
+      // ESP上传状态：修复——同步mode到全局
       if(data.type === "status") {
         fanState.online = true;
-        fanState.temp = data.temp || 0;
-        fanState.humi = data.humi || 0;
-        fanState.power = data.power || fanState.power;
-        fanState.speed = data.speed || 0; // 自动模式风速=ESP实时风速
+        fanState.temp = data.temp;
+        fanState.humi = data.humi;
+        fanState.power = data.power;
+        fanState.speed = data.speed;
+        fanState.mode = data.mode; // ✅ 修复：必须同步模式
         broadcastStatus();
       }
 
@@ -88,7 +82,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-// 广播状态给网页，网页自动更新：图标、风速、模式、按钮全同步
 function broadcastStatus() {
   const msg = JSON.stringify({type:"status",...fanState});
   webClients.forEach(c => c.readyState === 1 && c.send(msg));
